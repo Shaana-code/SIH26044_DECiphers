@@ -1,1 +1,28 @@
+# Environment & Secrets (NEVER push to GitHub)
+.env
+.env.local
+.streamlit/secrets.toml
 
+# SQLite Database
+portal.db
+*.db
+*.sqlite3
+
+# Python Virtual Environment & Bytecode
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# IDE & Editor Configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating System Files
+.DS_Store
+Thumbs.db
