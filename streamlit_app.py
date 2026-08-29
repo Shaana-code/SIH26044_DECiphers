@@ -2,7 +2,7 @@
 SIH Problem Statement 26044 | Team DECiphers
 Portal for Academia-Industry Collaboration for Skill Mapping, Internships & Placement
 -------------------------------------------------------------------------------------
-Fully Dynamic Multi-Persona Web Dashboard with SQLite & Groq AI Integration
+Complete Dynamic Web Dashboard (Modules 1 to 7) with Multi-Persona Registration & Groq AI
 """
 
 import os
@@ -12,10 +12,11 @@ from datetime import datetime, timedelta
 import streamlit as st
 import requests
 
-# --- 1. SECRETS & AI CONFIGURATION ---
+# --- 1. CONFIGURATION & SECRETS ---
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
 GROQ_MODEL = st.secrets.get("GROQ_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"))
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
+API_URL = st.secrets.get("API_URL", os.getenv("API_URL", "http://127.0.0.1:8000"))
 
 # --- 2. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -35,7 +36,25 @@ def init_dynamic_db():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # 1. Opportunities Table (Module 5)
+    # 1. Users Table (Module 1: IAM)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        hashed_password TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        department TEXT,
+        institution_or_company TEXT,
+        cgpa REAL,
+        attendance REAL,
+        is_active INTEGER DEFAULT 1,
+        is_verified INTEGER DEFAULT 1,
+        created_at TEXT
+    );
+    """)
+
+    # 2. Opportunities Table (Module 5)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS opportunities (
         id TEXT PRIMARY KEY,
@@ -50,7 +69,7 @@ def init_dynamic_db():
     );
     """)
 
-    # 2. Applications Table (Module 6)
+    # 3. Applications Table (Module 6)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS applications (
         id TEXT PRIMARY KEY,
@@ -69,11 +88,13 @@ def init_dynamic_db():
     );
     """)
 
-    # 3. Logbooks Table (Module 7)
+    # 4. Internship Logbooks Table (Module 7)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS internship_logbooks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_email TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        company_name TEXT NOT NULL,
         week_number TEXT NOT NULL,
         hours_worked INTEGER NOT NULL,
         milestones TEXT NOT NULL,
@@ -85,7 +106,18 @@ def init_dynamic_db():
     );
     """)
 
-    # Pre-seed sample opportunities if table is empty
+    # Pre-seed default users if empty
+    cur.execute("SELECT COUNT(*) FROM users")
+    if cur.fetchone()[0] == 0:
+        sample_users = [
+            ("usr-001", "student@test.com", "Student@123", "Aarav Sharma", "STUDENT", "Computer Science Engineering", "Global Tech University", 8.5, 85.0, 1, 1, datetime.utcnow().isoformat()),
+            ("usr-002", "recruiter@company.com", "Recruiter@123", "Priya Mehta", "RECRUITER", "Talent Acquisition", "Nexus AI Systems", None, None, 1, 1, datetime.utcnow().isoformat()),
+            ("usr-003", "faculty@college.edu", "Faculty@123", "Dr. Rajesh Rao", "FACULTY_TPO", "Computer Science Engineering", "Global Tech University", None, None, 1, 1, datetime.utcnow().isoformat()),
+            ("usr-004", "admin@college.edu", "Admin@123", "University Dean", "COLLEGE_ADMIN", "Dean Academic Affairs", "Global Tech University", None, None, 1, 1, datetime.utcnow().isoformat())
+        ]
+        cur.executemany("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", sample_users)
+
+    # Pre-seed opportunities if empty
     cur.execute("SELECT COUNT(*) FROM opportunities")
     if cur.fetchone()[0] == 0:
         sample_jobs = [
@@ -95,7 +127,7 @@ def init_dynamic_db():
         ]
         cur.executemany("INSERT INTO opportunities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", sample_jobs)
 
-    # Pre-seed sample applications if table is empty
+    # Pre-seed applications if empty
     cur.execute("SELECT COUNT(*) FROM applications")
     if cur.fetchone()[0] == 0:
         sample_apps = [
@@ -118,15 +150,15 @@ def init_dynamic_db():
         ]
         cur.executemany("INSERT INTO applications VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", sample_apps)
 
-    # Pre-seed sample logbooks
+    # Pre-seed logbooks if empty
     cur.execute("SELECT COUNT(*) FROM internship_logbooks")
     if cur.fetchone()[0] == 0:
         sample_logs = [
-            ("student@test.com", "Week 1", 40, "Onboarding, repo setup, and microservice architecture planning", "https://github.com/nexus-ai/rag-pipeline/pull/1", 5.0, 5.0, "APPROVED", datetime.utcnow().isoformat()),
-            ("student@test.com", "Week 2", 42, "Implemented async JWT authentication middleware and Redis rate limiter", "https://github.com/nexus-ai/rag-pipeline/pull/14", 4.8, 5.0, "APPROVED", datetime.utcnow().isoformat()),
-            ("student@test.com", "Week 3", 38, "PostgreSQL schema migrations and connection pool optimization in SQLAlchemy", "https://github.com/nexus-ai/rag-pipeline/pull/28", 4.9, 4.8, "APPROVED", datetime.utcnow().isoformat())
+            ("student@test.com", "Aarav Sharma", "Nexus AI Systems", "Week 1", 40, "Onboarding, repo setup, and microservice architecture planning", "https://github.com/nexus-ai/rag-pipeline/pull/1", 5.0, 5.0, "APPROVED", datetime.utcnow().isoformat()),
+            ("student@test.com", "Aarav Sharma", "Nexus AI Systems", "Week 2", 42, "Implemented async JWT authentication middleware and Redis rate limiter", "https://github.com/nexus-ai/rag-pipeline/pull/14", 4.8, 5.0, "APPROVED", datetime.utcnow().isoformat()),
+            ("student@test.com", "Aarav Sharma", "Nexus AI Systems", "Week 3", 38, "PostgreSQL schema migrations and connection pool optimization in SQLAlchemy", "https://github.com/nexus-ai/rag-pipeline/pull/28", 4.9, 4.8, "APPROVED", datetime.utcnow().isoformat())
         ]
-        cur.executemany("INSERT INTO internship_logbooks (student_email, week_number, hours_worked, milestones, artifact_link, mentor_rating, faculty_rating, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", sample_logs)
+        cur.executemany("INSERT INTO internship_logbooks (student_email, student_name, company_name, week_number, hours_worked, milestones, artifact_link, mentor_rating, faculty_rating, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", sample_logs)
 
     conn.commit()
     conn.close()
@@ -134,20 +166,25 @@ def init_dynamic_db():
 # Initialize DB on load
 init_dynamic_db()
 
-# --- 4. GROQ AI HELPER FUNCTION ---
+# --- 4. GROQ AI REASONING ENGINE (WITH LIVE FALLBACK) ---
 def call_groq_ai(system_prompt: str, user_prompt: str, response_format="json") -> dict:
-    """Calls Groq API directly with fallback demo response if key is missing."""
-    if not GROQ_API_KEY or GROQ_API_KEY == "gsk_PASTE_YOUR_LOCAL_KEY_HERE":
-        # Fallback response for offline demo
+    if not GROQ_API_KEY or GROQ_API_KEY.startswith("gsk_PASTE"):
+        # Deterministic dynamic fallback for offline demo
         return {
-            "score": 82.5,
+            "score": 84.5,
             "verdict": "STRONG_MATCH",
-            "summary": "Candidate exhibits strong programming fundamentals and relevant coursework.",
-            "strengths": ["Python", "FastAPI", "Database Modeling"],
-            "missing": ["Docker Containerization", "Cloud Deployments"],
+            "summary": "Candidate displays strong technical acumen with direct alignment to required frameworks.",
+            "strengths": ["Core Programming", "Asynchronous REST Frameworks", "Database Modeling"],
+            "deficits": [{"skill": "Docker Containerization", "remedy": "Complete Docker Certified Associate track."}],
             "questions": [
-                {"q": "How do you handle asynchronous database transactions in FastAPI with SQLAlchemy 2.0?", "skill": "FastAPI", "why": "Validates claimed async backend skills."},
-                {"q": "How would you containerize your microservice for deployment onto a Kubernetes cluster?", "skill": "Docker", "why": "Tests identified containerization gap."}
+                {"q": "How do you manage connection pooling and transactions in asynchronous APIs with SQLAlchemy 2.0?", "skill": "FastAPI & SQL", "why": "Validates claimed production backend scalability."},
+                {"q": "Explain how you would containerize your microservice for deployment onto a Kubernetes cluster?", "skill": "Docker", "why": "Directly probes identified resume gap."}
+            ],
+            "skills": [
+                {"name": "FastAPI", "category": "Backend", "level": "Advanced"},
+                {"name": "PostgreSQL", "category": "Database", "level": "Intermediate"},
+                {"name": "Docker & Kubernetes", "category": "Cloud & DevOps", "level": "Intermediate"},
+                {"name": "Vector Databases", "category": "Generative AI", "level": "Advanced"}
             ]
         }
     
@@ -173,26 +210,29 @@ def call_groq_ai(system_prompt: str, user_prompt: str, response_format="json") -
         else:
             st.error(f"Groq API Error ({res.status_code}): {res.text}")
     except Exception as e:
-        st.warning(f"AI Service Notice: {str(e)}")
+        st.warning(f"AI Service Notification: {str(e)}")
     
     return {}
 
-# --- 5. SIDEBAR: 1-CLICK PERSONA SWITCHER ---
+# --- 5. SESSION STATE & USER SETUP ---
 if "user_info" not in st.session_state or st.session_state.user_info is None:
     st.session_state.user_info = {
-        "id": "11111111-1111-1111-1111-111111111111",
+        "id": "usr-001",
         "name": "Aarav Sharma", 
         "role": "STUDENT", 
         "email": "student@test.com",
-        "student_id": 1001,
         "dept": "Computer Science Engineering",
+        "institution": "Global Tech University",
         "cgpa": 8.5,
         "attendance": 85.0
     }
+if "token" not in st.session_state:
+    st.session_state.token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50QHRlc3QuY29tIiwicm9sZSI6IlNUVURFTlQifQ.demo"
 
+# --- 6. SIDEBAR: 1-CLICK PERSONA SWITCHER & MULTI-USER REGISTRATION ---
 with st.sidebar:
     st.title("🎓 SIH 26044")
-    st.caption("Academia–Industry Collaboration | Team DECiphers")
+    st.caption("Academia–Industry Collaboration Platform | Team DECiphers")
     
     if GROQ_API_KEY and not GROQ_API_KEY.startswith("gsk_PASTE"):
         st.success("🟢 Groq AI Active (High Speed)")
@@ -200,55 +240,101 @@ with st.sidebar:
         st.info("🟡 Groq Key in Demo Fallback Mode")
 
     st.divider()
-    st.subheader("⚡ Switch Persona (Live Demo)")
 
+    # SECTION A: QUICK PERSONA SWITCHER
+    st.subheader("⚡ 1-Click Persona Switcher")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🎓 Student", use_container_width=True):
             st.session_state.user_info = {
-                "id": "11111111-1111-1111-1111-111111111111",
-                "name": "Aarav Sharma", 
-                "role": "STUDENT", 
-                "email": "student@test.com",
-                "student_id": 1001,
-                "dept": "Computer Science Engineering",
-                "cgpa": 8.5,
-                "attendance": 85.0
+                "id": "usr-001", "name": "Aarav Sharma", "role": "STUDENT", "email": "student@test.com",
+                "dept": "Computer Science Engineering", "institution": "Global Tech University", "cgpa": 8.5, "attendance": 85.0
             }
             st.rerun()
-            
     with col2:
         if st.button("💼 Recruiter", use_container_width=True):
             st.session_state.user_info = {
-                "id": "22222222-2222-2222-2222-222222222222",
-                "name": "Priya Mehta", 
-                "role": "RECRUITER", 
-                "email": "recruiter@company.com",
-                "company": "Nexus AI Systems"
+                "id": "usr-002", "name": "Priya Mehta", "role": "RECRUITER", "email": "recruiter@company.com",
+                "company": "Nexus AI Systems", "institution": "Nexus AI Systems", "dept": "Talent Acquisition"
             }
             st.rerun()
 
     col3, col4 = st.columns(2)
     with col3:
-        if st.button("🏛️ Faculty / TPO", use_container_width=True):
+        if st.button("🏛️ Faculty/TPO", use_container_width=True):
             st.session_state.user_info = {
-                "id": "33333333-3333-3333-3333-333333333333",
-                "name": "Dr. Rajesh Rao", 
-                "role": "FACULTY_TPO", 
-                "email": "faculty@college.edu",
-                "institution": "Global Tech University"
+                "id": "usr-003", "name": "Dr. Rajesh Rao", "role": "FACULTY_TPO", "email": "faculty@college.edu",
+                "institution": "Global Tech University", "dept": "Computer Science Engineering"
             }
             st.rerun()
-            
     with col4:
         if st.button("🏫 Admin", use_container_width=True):
             st.session_state.user_info = {
-                "id": "44444444-4444-4444-4444-444444444444",
-                "name": "University Dean", 
-                "role": "COLLEGE_ADMIN", 
-                "email": "admin@college.edu"
+                "id": "usr-004", "name": "University Dean", "role": "COLLEGE_ADMIN", "email": "admin@college.edu",
+                "institution": "Global Tech University", "dept": "Academic Council"
             }
             st.rerun()
+
+    st.divider()
+
+    # SECTION B: UNIVERSAL REGISTRATION FOR ALL 4 PERSONAS
+    with st.expander("➕ Register New User Profile", expanded=False):
+        st.caption("Create and immediately log in as a new user:")
+        reg_role = st.selectbox("Select Account Role", ["STUDENT", "RECRUITER", "FACULTY_TPO", "COLLEGE_ADMIN"])
+        
+        with st.form("universal_registration_form"):
+            reg_name = st.text_input("Full Name", value="Sneha Patel" if reg_role == "STUDENT" else "Vikram Seth")
+            reg_email = st.text_input("Email Address", value=f"{reg_name.lower().replace(' ', '.')}@domain.edu")
+            reg_password = st.text_input("Password", type="password", value="SecurePass@123")
+            
+            # Dynamic Fields based on Role
+            reg_dept = ""
+            reg_org = ""
+            reg_cgpa = None
+            reg_att = None
+            
+            if reg_role == "STUDENT":
+                reg_dept = st.selectbox("Department", ["Computer Science Engineering", "Mathematics & Computing", "Data Science & AI", "Electronics & Communication"])
+                reg_org = st.text_input("University / College", value="Global Tech University")
+                reg_cgpa = st.number_input("Cumulative CGPA", min_value=0.0, max_value=10.0, value=8.7, step=0.1)
+                reg_att = st.number_input("Attendance Percentage", min_value=0.0, max_value=100.0, value=88.0, step=1.0)
+            elif reg_role == "RECRUITER":
+                reg_org = st.text_input("Hiring Enterprise / Company", value="CloudScale Technologies")
+                reg_dept = st.text_input("Department / Team", value="Engineering Talent Acquisition")
+            elif reg_role == "FACULTY_TPO":
+                reg_org = st.text_input("University / Institute", value="Global Tech University")
+                reg_dept = st.selectbox("Academic Department", ["Computer Science Engineering", "Mathematics & Computing", "Training & Placement Cell"])
+            elif reg_role == "COLLEGE_ADMIN":
+                reg_org = st.text_input("University / Institution", value="Global Tech University")
+                reg_dept = st.text_input("Administrative Designation", value="Office of Academic Dean")
+
+            reg_submit = st.form_submit_button("🚀 Register & Activate Profile", use_container_width=True)
+            if reg_submit:
+                new_uid = f"usr-{datetime.utcnow().strftime('%H%M%S')}"
+                conn = get_db_connection()
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT OR REPLACE INTO users 
+                    (id, email, hashed_password, full_name, role, department, institution_or_company, cgpa, attendance, is_active, is_verified, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+                """, (new_uid, reg_email, reg_password, reg_name, reg_role, reg_dept, reg_org, reg_cgpa, reg_att, datetime.utcnow().isoformat()))
+                conn.commit()
+                conn.close()
+
+                # Automatically switch session to the newly registered user
+                st.session_state.user_info = {
+                    "id": new_uid,
+                    "name": reg_name,
+                    "role": reg_role,
+                    "email": reg_email,
+                    "dept": reg_dept,
+                    "institution": reg_org,
+                    "company": reg_org if reg_role == "RECRUITER" else None,
+                    "cgpa": reg_cgpa,
+                    "attendance": reg_att
+                }
+                st.success(f"🎉 Account created! Logged in as **{reg_name}** (`{reg_role}`).")
+                st.rerun()
 
     st.divider()
     user = st.session_state.user_info
@@ -256,33 +342,36 @@ with st.sidebar:
         st.markdown(f"### 👤 **{user['name']}**")
         st.markdown(f"**Role:** `{user['role']}`")
         st.markdown(f"**Email:** `{user['email']}`")
-        if "cgpa" in user:
+        if user.get("cgpa") is not None:
             st.caption(f"🎓 CGPA: **{user['cgpa']}** | Attendance: **{user['attendance']}%**")
+        if user.get("institution") or user.get("company"):
+            st.caption(f"🏢 Org: **{user.get('institution') or user.get('company')}**")
 
-# --- 6. TOP KPI SUMMARY DASHBOARD ---
+# --- 7. TOP KPI SUMMARY METRICS ---
 st.title("🎓 Academia–Industry Collaboration & AI Placement Portal")
 st.caption("SIH 26044: Real-time Skill Mapping, AI-ATS, Prerequisite Verification & Credit Sync")
 
 conn = get_db_connection()
 total_opps = conn.execute("SELECT COUNT(*) FROM opportunities WHERE status='OPEN'").fetchone()[0]
 total_apps = conn.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
-avg_score = conn.execute("SELECT AVG(match_score) FROM applications").fetchone()[0] or 75.0
+avg_score = conn.execute("SELECT AVG(match_score) FROM applications").fetchone()[0] or 78.5
+total_registered = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
 conn.close()
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric(label="Active Hiring Drives", value=str(total_opps), delta="Live Openings")
-k2.metric(label="Total ATS Applications", value=str(total_apps), delta="+1 Real-time")
-k3.metric(label="Average AI Match Score", value=f"{avg_score:.1f}%", delta="+5.4% quality")
-k4.metric(label="Credit Transfer Rate", value="96.2%", delta="Module 7 Sync")
+k2.metric(label="ATS Applications", value=str(total_apps), delta="+1 Live Entry")
+k3.metric(label="Average AI Match Score", value=f"{avg_score:.1f}%", delta="+6.2% quality")
+k4.metric(label="Total Registered Users", value=str(total_registered), delta="Multi-Tenant DB")
 
 st.divider()
 
-# --- 7. MAIN NAVIGATION TABS (MODULES 1 TO 7) ---
+# --- 8. MAIN NAVIGATION TABS (MODULES 1 TO 7) ---
 tab_m4, tab_m6, tab_m2, tab_m3_5, tab_m7, tab_m1 = st.tabs([
     "🧠 1. AI Skill & Gap Engine (Mod 4)",
-    "💼 2. AI-ATS & Application Pipeline (Mod 6)",
+    "💼 2. AI-ATS & Recruitment (Mod 6)",
     "🏫 3. Academia & Prerequisite Verifier (Mod 2)",
-    "🏢 4. Corporate MoUs & Post Job (Mod 3 & 5)",
+    "🏢 4. Corporate MoUs & Opportunities (Mod 3 & 5)",
     "📋 5. Internship Monitoring & Credits (Mod 7)",
     "🔑 6. IAM & Access Control (Mod 1)"
 ])
@@ -292,34 +381,41 @@ tab_m4, tab_m6, tab_m2, tab_m3_5, tab_m7, tab_m1 = st.tabs([
 # =============================================================================
 with tab_m4:
     st.subheader("🧠 Module 4: Live AI Skill Extraction, Gap Scoring & Career Pathways")
-    st.write("Dynamic LLM reasoning to map any custom resume or syllabus against target industry roles.")
+    st.write("Dynamic LLM reasoning to map custom student resumes or course syllabi against industrial demand.")
 
     sub1, sub2, sub3 = st.tabs(["📄 AI Skill Extractor", "📊 Live Job Gap Analysis", "🎯 AI Career Recommendations"])
 
+    # SUBTAB 1: SKILL EXTRACTOR
     with sub1:
         st.markdown("#### 📄 Extract Skills from Any Course Syllabus or Resume")
-        sample_text = (
+        sample_syllabus = (
             "Course Syllabus: CS402 - Distributed AI & Cloud Systems.\n"
             "Topics: Microservices with Python and FastAPI. Relational database indexing with PostgreSQL and SQLAlchemy. "
             "Container orchestration using Docker and Kubernetes. Vector search with Milvus and Pinecone for RAG architectures. "
             "CI/CD pipeline automation with GitHub Actions and AWS deployments."
         )
-        custom_input = st.text_area("Enter Syllabus or Resume to Parse Dynamically:", value=sample_text, height=130)
+        
+        # Pro-Tip: Text paste + File upload support
+        custom_input = st.text_area("Enter Syllabus or Custom Resume to Parse Dynamically:", value=sample_syllabus, height=130)
+        uploaded_doc = st.file_uploader("📂 (Optional) Or upload a resume/syllabus text file:", type=["txt"])
+        if uploaded_doc is not None:
+            custom_input = uploaded_doc.read().decode("utf-8")
+            st.success("✅ File loaded into parser!")
 
         if st.button("🚀 Extract Skills with Groq AI", use_container_width=True):
             with st.spinner("AI parsing technical concepts and inferring proficiencies..."):
-                sys_prompt = "You are an ATS skill extractor. Return JSON with 'summary' (str) and 'skills' (list of {name, category, level})."
+                sys_prompt = "You are an expert ATS skill extractor. Return JSON with 'summary' (str) and 'skills' (list of {name, category, level})."
                 res_data = call_groq_ai(sys_prompt, custom_input)
                 
-                summary = res_data.get("summary", "Identified high-relevance technical skills for modern backend & AI roles.")
+                summary = res_data.get("summary", "Extracted core competencies with direct cloud & AI relevance.")
                 skills = res_data.get("skills", [
-                    {"name": "FastAPI", "category": "Backend", "level": "Advanced"},
-                    {"name": "PostgreSQL", "category": "Database", "level": "Intermediate"},
+                    {"name": "FastAPI", "category": "Backend Architecture", "level": "Advanced"},
+                    {"name": "PostgreSQL", "category": "Database Systems", "level": "Intermediate"},
                     {"name": "Docker & Kubernetes", "category": "Cloud & DevOps", "level": "Intermediate"},
-                    {"name": "Vector Databases (Milvus)", "category": "Generative AI", "level": "Advanced"}
+                    {"name": "Vector Databases (Milvus)", "category": "Generative AI / RAG", "level": "Advanced"}
                 ])
 
-                st.success(f"**Summary:** {summary}")
+                st.success(f"**Extraction Summary:** {summary}")
                 cols = st.columns(2)
                 for idx, sk in enumerate(skills):
                     with cols[idx % 2]:
@@ -327,6 +423,7 @@ with tab_m4:
                             st.markdown(f"##### **{sk.get('name', 'Skill')}** `[{sk.get('level', 'Intermediate')}]`")
                             st.caption(f"**Category:** {sk.get('category', 'Technical')}")
 
+    # SUBTAB 2: GAP ANALYSIS
     with sub2:
         st.markdown("#### 📊 Dynamic Job Gap Analysis & Readiness Meter")
         c_l, c_r = st.columns(2)
@@ -334,11 +431,11 @@ with tab_m4:
             dyn_role = st.text_input("Target Job Title", value="Full-Stack AI Systems Engineer")
             dyn_jd = st.text_area("Target Job Requirements:", height=130, value="Requirements: Proficient in Python, FastAPI, PyTorch, Vector Databases (Pinecone/Milvus), Docker containerization, Kubernetes, and AWS deployments.")
         with c_r:
-            st.text_input("Candidate Name", value=st.session_state.user_info.get("name", "Aarav Sharma"), disabled=True)
-            dyn_resume = st.text_area("Candidate Resume / Profile:", height=130, value="Final-year student. Strong in Python, FastAPI REST APIs, SQL, and database design. Built web scrapers and simple ML models. Have not worked with Docker, Kubernetes, or Vector DBs yet.")
+            st.text_input("Candidate Name", value=st.session_state.user_info.get("name", "Candidate"), disabled=True)
+            dyn_resume = st.text_area("Candidate Custom Resume / Profile:", height=130, value="Final-year student. Strong in Python, FastAPI REST APIs, SQL, and database design. Built web scrapers and simple ML models. Have not worked with Docker, Kubernetes, or Vector DBs yet.")
 
         if st.button("⚡ Compute Semantic Gap Score", use_container_width=True):
-            with st.spinner("Analyzing semantic gap with Groq LLM..."):
+            with st.spinner("Analyzing semantic distance with Groq LLM..."):
                 sys_p = "You are a Technical Hiring Director. Compare resume against JD. Return JSON with 'score' (float 0-100), 'verdict' (str), 'summary' (str), 'strengths' (list of str), 'deficits' (list of {skill, remedy})."
                 u_p = f"Role: {dyn_role}\nJD: {dyn_jd}\nResume: {dyn_resume}"
                 gap_data = call_groq_ai(sys_p, u_p)
@@ -365,6 +462,7 @@ with tab_m4:
                             st.markdown(f"**{d_item.get('skill')}**")
                             st.caption(f"💡 **Remedy:** {d_item.get('remedy')}")
 
+    # SUBTAB 3: RECOMMENDATIONS
     with sub3:
         st.markdown("#### 🎯 AI Personalized Career & R&D Pathways")
         p_type = st.selectbox("Persona Type", ["STUDENT", "FACULTY"])
@@ -402,7 +500,7 @@ with tab_m6:
 
     ats_sub1, ats_sub2 = st.tabs(["📋 Recruiter Live ATS Pipeline", "📝 Student Apply & Offer Tracker"])
 
-    # --- RECRUITER ATS BOARD ---
+    # RECRUITER ATS BOARD
     with ats_sub1:
         st.markdown("#### 💼 Live Candidate Board (Ranked by AI Match Score)")
         
@@ -454,7 +552,7 @@ with tab_m6:
                                     st.markdown(f"**{idx}. {q.get('q')}**")
                                     st.caption(f"🎯 *Target Skill:* `{q.get('skill')}` | 💡 *Why Ask:* _{q.get('why')}_")
 
-    # --- STUDENT APPLY & OFFER TRACKER ---
+    # STUDENT APPLY & OFFER TRACKER
     with ats_sub2:
         st.markdown("#### 📝 Submit Live Application with Real-Time AI Screening")
         
@@ -472,14 +570,13 @@ with tab_m6:
                 st.caption(f"🎯 **Required Skills:** `{opp_obj['skills']}`")
                 st.info(f"📋 **Eligibility Rules:** {opp_obj['eligibility']}")
 
-                user_name = st.session_state.user_info.get("name", "Aarav Sharma")
+                user_name = st.session_state.user_info.get("name", "Student")
                 user_email = st.session_state.user_info.get("email", "student@test.com")
                 
-                sub_resume = st.text_area("Your Resume / Portfolio Summary to Submit:", value="Aarav Sharma | Final Year CS | Email: student@test.com\nProficient in Python, FastAPI, PostgreSQL, and Git. Built asynchronous REST APIs and search engine backend prototypes.", height=110)
+                sub_resume = st.text_area("Your Resume / Custom Portfolio to Submit:", value=f"{user_name} | Email: {user_email}\nProficient in Python, FastAPI, PostgreSQL, and Git. Built asynchronous REST APIs and search engine backend prototypes.", height=110)
 
                 if st.button("🚀 Submit Application & Trigger Real-Time AI Screening", use_container_width=True):
                     with st.spinner("AI evaluating candidate against job criteria in real-time..."):
-                        # AI Screen
                         sys_p = "You are an ATS Evaluator. Return JSON with 'score' (float 0-100), 'verdict' (str: STRONG_MATCH/POTENTIAL_MATCH/LOW_FIT), 'summary' (str)."
                         u_p = f"Job: {opp_obj['title']} at {opp_obj['company']}\nReqs: {opp_obj['skills']}\nResume: {sub_resume}"
                         ai_res = call_groq_ai(sys_p, u_p)
@@ -488,7 +585,6 @@ with tab_m6:
                         verdict_val = ai_res.get("verdict", "STRONG_MATCH")
                         summary_val = ai_res.get("summary", "Candidate displays strong relevant backend qualifications.")
 
-                        # Dynamic insert into SQLite
                         new_app_id = f"app-{datetime.utcnow().strftime('%M%S')}"
                         c = get_db_connection()
                         c.execute(
@@ -552,25 +648,30 @@ with tab_m2:
 
     with acad2:
         st.markdown("#### 🔍 Student Academic Verification Engine (`AcademicVerificationService`)")
-        eval_cand = st.selectbox("Select Student to Evaluate:", [
-            "Student 1001 (Aarav Sharma - High Performer)",
-            "Student 1002 (Karan Verma - Backlog & Low Attendance)"
-        ])
+        
+        conn = get_db_connection()
+        all_students = conn.execute("SELECT * FROM users WHERE role='STUDENT'").fetchall()
+        conn.close()
+        
+        student_options = [f"{s['full_name']} ({s['email']})" for s in all_students] if all_students else ["Aarav Sharma (student@test.com)"]
+        selected_stu = st.selectbox("Select Student to Evaluate:", student_options)
+        
+        # Fetch current record
+        curr_s = next((s for s in all_students if f"{s['full_name']} ({s['email']})" == selected_stu), None)
+        
+        cgpa_val = curr_s["cgpa"] if curr_s and curr_s["cgpa"] else 8.5
+        att_val = curr_s["attendance"] if curr_s and curr_s["attendance"] else 85.0
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        col_m1.metric("Cumulative CGPA", f"{cgpa_val:.2f}", "Eligible (>= 7.0)" if cgpa_val >= 7.0 else "Below Cutoff")
+        col_m2.metric("Active Backlogs", "0", "Clean Record")
+        col_m3.metric("Attendance", f"{att_val:.1f}%", "Above 75% Safe Threshold" if att_val >= 75 else "Below 75% Cutoff")
+        col_m4.metric("Prerequisite (CS301)", "Passed" if cgpa_val >= 7.0 else "BLOCKED", "CS101 & CS201 Cleared")
 
-        if "1001" in eval_cand:
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            col_m1.metric("Cumulative CGPA", "8.50", "Eligible (>= 7.0)")
-            col_m2.metric("Active Backlogs", "0", "Clean Record")
-            col_m3.metric("Attendance", "85.0%", "Above 75% Safe Threshold")
-            col_m4.metric("Prerequisite (CS301)", "Passed", "CS101 & CS201 Cleared")
-            st.success("✅ **Placement Eligibility Status: VERIFIED & ELIGIBLE** for Tier-1 Corporate Hiring Drives.")
+        if cgpa_val >= 7.0 and att_val >= 75.0:
+            st.success(f"✅ **Placement Eligibility Status: VERIFIED & ELIGIBLE** for Tier-1 Corporate Hiring Drives.")
         else:
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            col_m1.metric("Cumulative CGPA", "4.00", "Below Cutoff", delta_color="inverse")
-            col_m2.metric("Active Backlogs", "1 Active (Grade F)", "Failed CS101", delta_color="inverse")
-            col_m3.metric("Attendance", "60.0%", "Below 75% Cutoff", delta_color="inverse")
-            col_m4.metric("Prerequisite (CS301)", "BLOCKED", "CS101 Not Cleared", delta_color="inverse")
-            st.error("❌ **Placement Eligibility Status: BLOCKED.** Student has active backlogs and attendance below 75%. Blocked from Module 5/6 campus placement drives.")
+            st.error(f"❌ **Placement Eligibility Status: BLOCKED.** Student does not satisfy institutional criteria.")
 
 # =============================================================================
 # TAB 4: MODULES 3 & 5 (CORPORATE MoUs & DYNAMIC JOB POSTINGS)
@@ -653,7 +754,8 @@ with tab_m7:
         with st.form("logbook_form"):
             col_lg1, col_lg2 = st.columns(2)
             with col_lg1:
-                st.text_input("Enrolled Student", value="Aarav Sharma (ID: 1001)", disabled=True)
+                cur_user_name = st.session_state.user_info.get("name", "Student")
+                st.text_input("Enrolled Student", value=f"{cur_user_name}", disabled=True)
                 week_choice = st.selectbox("Logbook Week", ["Week 4: Vector Search & Redis Caching", "Week 5: Async API Optimization", "Week 6: Final Deployment"])
             with col_lg2:
                 hours_input = st.number_input("Hours Worked", min_value=1, max_value=60, value=40)
@@ -665,8 +767,8 @@ with tab_m7:
             if log_submitted:
                 c = get_db_connection()
                 c.execute(
-                    "INSERT INTO internship_logbooks (student_email, week_number, hours_worked, milestones, artifact_link, mentor_rating, faculty_rating, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (st.session_state.user_info.get("email", "student@test.com"), week_choice.split(":")[0], hours_input, milestone_desc, pr_link, 5.0, 5.0, "APPROVED", datetime.utcnow().isoformat())
+                    "INSERT INTO internship_logbooks (student_email, student_name, company_name, week_number, hours_worked, milestones, artifact_link, mentor_rating, faculty_rating, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (st.session_state.user_info.get("email", "student@test.com"), cur_user_name, "Nexus AI Systems", week_choice.split(":")[0], hours_input, milestone_desc, pr_link, 5.0, 5.0, "APPROVED", datetime.utcnow().isoformat())
                 )
                 c.commit()
                 c.close()
@@ -675,11 +777,12 @@ with tab_m7:
 
         st.markdown("##### 📜 Live Verified Logbook History (From Database)")
         conn = get_db_connection()
-        logs_db = conn.execute("SELECT week_number, hours_worked, milestones, mentor_rating, status, submitted_at FROM internship_logbooks ORDER BY id DESC").fetchall()
+        logs_db = conn.execute("SELECT student_name, week_number, hours_worked, milestones, mentor_rating, status, submitted_at FROM internship_logbooks ORDER BY id DESC").fetchall()
         conn.close()
         
         st.table([
             {
+                "Student": l["student_name"],
                 "Week": l["week_number"], 
                 "Hours": l["hours_worked"], 
                 "Milestones": l["milestones"], 
@@ -735,19 +838,42 @@ with tab_m7:
         with c2:
             with st.container(border=True):
                 st.markdown("### 📜 Digital Completion Certificate")
-                st.write("Awarded to **Aarav Sharma (Student ID: 1001)** for completing 8-Week Professional Internship in **AI Systems Engineering** with Grade **O (Outstanding)**.")
-                st.download_button("📥 Download Verified Certificate (PDF)", data=b"Mock Certificate PDF Payload for Aarav Sharma", file_name="Certificate_Aarav_Sharma.pdf", use_container_width=True)
+                cur_name = st.session_state.user_info.get("name", "Student")
+                st.write(f"Awarded to **{cur_name}** for completing 8-Week Professional Internship in **AI Systems Engineering** with Grade **O (Outstanding)**.")
+                st.download_button(
+                    "📥 Download Verified Certificate (PDF)", 
+                    data=f"Verified Certificate for {cur_name} - Grade O (Outstanding)".encode("utf-8"), 
+                    file_name=f"Certificate_{cur_name.replace(' ', '_')}.pdf", 
+                    use_container_width=True
+                )
 
 # =============================================================================
 # TAB 6: MODULE 1 (IAM & SECURITY AUDIT)
 # =============================================================================
 with tab_m1:
     st.subheader("🔑 Module 1: Identity & Access Management (IAM) & RBAC Matrix")
-    st.write("Multi-role authorization, user registry, and live JWT token inspector.")
+    st.write("Multi-tenant user registry, dynamic user accounts, and active JWT token inspector.")
 
-    iam1, iam2 = st.tabs(["🛡️ RBAC Permissions Matrix", "🔍 Active JWT Token Inspector"])
+    iam1, iam2, iam3 = st.tabs(["📋 Live User Directory (portal.db)", "🛡️ RBAC Permissions Matrix", "🔍 Active JWT Token Inspector"])
 
     with iam1:
+        st.markdown("#### 👥 Registered Multi-Tenant Users in `portal.db`")
+        conn = get_db_connection()
+        all_u = conn.execute("SELECT id, full_name, email, role, department, institution_or_company, created_at FROM users ORDER BY created_at DESC").fetchall()
+        conn.close()
+        
+        st.table([
+            {
+                "Full Name": u["full_name"],
+                "Email": u["email"],
+                "Role": u["role"],
+                "Department": u["department"] or "General",
+                "Organization": u["institution_or_company"] or "University",
+                "Created": u["created_at"][:10]
+            } for u in all_u
+        ])
+
+    with iam2:
         st.markdown("#### 🛡️ Role-Based Access Control (RBAC) Matrix")
         st.table([
             {"Role": "STUDENT", "Module 1 (Auth)": "Self Profile", "Module 2 (Academia)": "View Own Grades", "Module 4 (AI Skills)": "Run Gap Analysis", "Module 5/6 (ATS)": "Apply / View Offers", "Module 7 (Logbook)": "Submit Logs"},
@@ -756,7 +882,7 @@ with tab_m1:
             {"Role": "COLLEGE_ADMIN", "Module 1 (Auth)": "Full Tenant", "Module 2 (Academia)": "Curriculum CRUD", "Module 4 (AI Skills)": "Taxonomy Edit", "Module 5/6 (ATS)": "Approve MoUs / Drives", "Module 7 (Logbook)": "Credit Sync Board"}
         ])
 
-    with iam2:
+    with iam3:
         st.markdown("#### 🔍 Active JWT Session Token Decoder")
         with st.container(border=True):
             st.markdown(f"**Current Logged-in Subject (`sub`):** `{st.session_state.user_info['email']}`")
