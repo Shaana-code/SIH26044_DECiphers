@@ -3,7 +3,10 @@ import requests
 import json
 from datetime import datetime
 
-API_URL = "http://127.0.0.1:8000"
+# --- LOAD SECRETS (Works both on Streamlit Cloud and Locally) ---
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
+GROQ_MODEL = st.secrets.get("GROQ_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"))
+API_URL = st.secrets.get("API_URL", os.getenv("API_URL", "http://127.0.0.1:8000"))
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
