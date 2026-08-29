@@ -1,160 +1,153 @@
-import streamlit as st
-import pandas as pd
-from datetime import datetime, date
+"""
+SIH Problem Statement 26044 | Team DECiphers
+Portal for Academia-Industry Collaboration for Skill Mapping, Internships & Placement
+-------------------------------------------------------------------------------------
+Master FastAPI Application Entrypoint (Aggregating Modules 1 to 7)
+"""
 
-# --- 1. PAGE CONFIG & THEME ---
-st.set_page_config(page_title="DECiphers: Campus-Corporate Bridge", layout="wide")
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
+from core.database import engine, Base
+from core.config import settings
 
-# --- 2. INITIALIZE SESSION STATE (Using your specific Entity Names) ---
-if 'db' not in st.session_state:
-    st.session_state.db = {
-        "users": [
-            {"UserID": "USR001", "Name": "Admin", "Role": "Super Admin", "Email": "admin@university.edu"},
-            {"UserID": "USR002", "Name": "Rohan", "Role": "Student", "Email": "rohan@student.edu", "CGPA": 8.2, "Skills": ["Python", "SQL"]}
+# =============================================================================
+# 1. IMPORT ALL DATABASE MODELS (Registers tables with SQLAlchemy Base metadata)
+# =============================================================================
+try:
+    import modules.module1_iam.models
+    import modules.module2_academia.models
+    import modules.module3_corporate.models
+    import modules.module4_ai_skills.models_skill_ai
+    import modules.module5_opportunities.models
+    import modules.module6_applications.models
+    import modules.module7_evaluations.models
+except ImportError as e:
+    print(f"[Warning] Some module models could not be imported: {e}")
+
+# =============================================================================
+# 2. IMPORT ROUTERS FOR MODULES 1 THROUGH 7
+# =============================================================================
+from modules.module1_iam.routes import auth_router
+from modules.module2_academia.routes import academia_router
+from modules.module3_corporate.routes import corporate_router
+from modules.module4_ai_skills.routes_skill_ai import ai_skill_router
+from modules.module5_opportunities.routes import opportunity_router
+from modules.module6_applications.routes import application_router
+from modules.module7_evaluations.routes import evaluation_router
+
+
+# =============================================================================
+# 3. APPLICATION LIFECYCLE MANAGEMENT (STARTUP / SHUTDOWN)
+# =============================================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifecycle manager: Automatically verifies database connectivity and
+    creates all database tables across Modules 1 to 7 on application startup.
+    """
+    print("=" * 70)
+    print(f"🚀 Starting {settings.PROJECT_NAME}...")
+    print(f"📦 Database Target: {settings.DATABASE_URL}")
+    print(f"🧠 AI Engine Target: Groq LLM ({settings.GROQ_MODEL})")
+    
+    # Initialize all database tables asynchronously
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("✅ All database tables for Modules 1–7 initialized successfully.")
+    print("=" * 70)
+    
+    yield
+    
+    # Clean shutdown
+    await engine.dispose()
+    print("🛑 Database connections closed. Application shut down.")
+
+
+# =============================================================================
+# 4. INITIALIZE FASTAPI APPLICATION WITH OPENAPI TAGS
+# =============================================================================
+tags_metadata = [
+    {"name": "Module 1: IAM & Auth", "description": "Multi-role RBAC, JWT tokens, user verification, and tenant profiles."},
+    {"name": "Module 2: Academia Management", "description": "Institutional hierarchy, course prerequisite graphs, and student eligibility verifier."},
+    {"name": "Module 3: Corporate Profiles", "description": "Company registration, recruiter team management, and MoU agreements."},
+    {"name": "Module 4: AI Skill Mapping Engine", "description": "LLM-driven syllabus extraction, semantic gap scoring, and personalized career roadmaps."},
+    {"name": "Module 5: Opportunity Management", "description": "Campus recruitment drives, internships, and dynamic eligibility rules."},
+    {"name": "Module 6: AI-ATS & Applications", "description": "Real-time AI resume screening, stage pipelines, interview scheduling, and TPO 1-offer policy."},
+    {"name": "Module 7: Internship & Credits", "description": "Milestone logbooks, 60/40 dual-mentor evaluation, and academic credit transfer sync."},
+    {"name": "System & Health", "description": "Platform status and diagnostic endpoints."}
+]
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    description="Unified Backend API for Academia-Industry Skill Mapping, Internships & Placement Engine (SIH 26044 - DECiphers)",
+    version="3.0.0",
+    lifespan=lifespan,
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+
+# =============================================================================
+# 5. CONFIGURE CORS (Cross-Origin Resource Sharing)
+# =============================================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows Streamlit, React, or mobile clients
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =============================================================================
+# 6. MOUNT ROUTERS FOR ALL 7 MODULES
+# =============================================================================
+app.include_router(auth_router)
+app.include_router(academia_router)
+app.include_router(corporate_router)
+app.include_router(ai_skill_router)
+app.include_router(opportunity_router)
+app.include_router(application_router)
+app.include_router(evaluation_router)
+
+
+# =============================================================================
+# 7. ROOT HEALTH-CHECK & SYSTEM DIAGNOSTIC ENDPOINTS
+# =============================================================================
+@app.get("/", tags=["System & Health"], status_code=status.HTTP_200_OK)
+async def root_health_check():
+    """
+    Root status endpoint returning active services, modules, and documentation paths.
+    """
+    return {
+        "status": "online",
+        "platform": settings.PROJECT_NAME,
+        "team": "DECiphers (SIH 26044)",
+        "version": "3.0.0",
+        "active_modules": [
+            "Module 1: Identity & Access Management (IAM & RBAC)",
+            "Module 2: Academia Management & Course Prerequisite Graphs",
+            "Module 3: Industry & Corporate Profile Management (MoUs)",
+            "Module 4: AI Skill Taxonomy, Extraction & Gap Engine (Groq)",
+            "Module 5: Opportunity Management (Internships & Jobs)",
+            "Module 6: AI-Powered Applicant Tracking System (ATS)",
+            "Module 7: Internship Evaluation & Academic Credit Transfer"
         ],
-        "Institution": [{"ID": "INST01", "Name": "University of Tech", "Dept": "CSE", "Batch": "2024"}],
-        "Company": [{"ID": "COMP01", "Name": "Google", "Domain": "Cloud", "Tier": "Tier 1", "MoUStatus": "Active"}],
-        "SkillTaxonomy": ["Python", "Java", "PostgreSQL", "Docker", "AWS", "Soft Skills"],
-        "OpportunityPosting": [
-            {"ID": "JOB01", "Title": "Backend Intern", "Company": "Google", "EligibilityRule": 7.5, "SkillsReq": ["Python", "PostgreSQL"]}
-        ],
-        "Application": [],
-        "InternshipEnrollment": [
-            {"ID": "INT101", "Student": "Rohan", "Company": "Google", "Status": "Active", "Credits": 4}
-        ],
-        "MilestoneLog": []
+        "api_documentation": "/docs",
+        "redoc_documentation": "/redoc"
     }
 
-# --- 3. SIDEBAR NAVIGATION ---
-st.sidebar.title("SIH26044 | DECiphers")
-menu = st.sidebar.selectbox("Navigate Modules", [
-    "Module 1: IAM",
-    "Module 2: Academia Management",
-    "Module 3: Industry & Corporate",
-    "Module 4: Skill Mapping Engine",
-    "Module 5: Opportunity Management",
-    "Module 6: Recruitment ATS",
-    "Module 7: Internship Monitoring"
-])
 
-# --- 4. MODULE LOGIC ---
+@app.get("/health", tags=["System & Health"])
+async def ping():
+    return {"ping": "pong", "service": "DECiphers Core Backend", "ai_provider": "Groq Cloud"}
 
-# MODULE 1: IAM
-if menu == "Module 1: IAM":
-    st.header("🔐 Identity & Access Management")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Profile Onboarding")
-        with st.form("register_form"):
-            name = st.text_input("Full Name")
-            role = st.selectbox("Role", ["Student", "Faculty/TPO", "Industry Recruiter", "College Admin"])
-            email = st.text_input("Institutional Email")
-            if st.form_submit_button("Register User"):
-                new_user = {"UserID": f"USR{len(st.session_state.db['users'])+1}", "Name": name, "Role": role, "Email": email}
-                st.session_state.db['users'].append(new_user)
-                st.success("User Onboarded via JWT/OAuth Flow simulation.")
-    with col2:
-        st.subheader("Active User Directory")
-        st.dataframe(pd.DataFrame(st.session_state.db['users']))
 
-# MODULE 2: ACADEMIA MANAGEMENT
-elif menu == "Module 2: Academia Management":
-    st.header("🏫 Academia Management Service")
-    st.subheader("Institutional Hierarchy")
-    st.write("Hierarchy: Institution → Department → Program → Batch")
-    st.table(st.session_state.db['Institution'])
-    
-    with st.expander("Academic Verification (Bulk Import)"):
-        st.file_uploader("Upload Student AcademicRecords (CSV/Excel)")
-        if st.button("Run Prerequisite Checks"):
-            st.info("Verification Engine: CGPA and Backlog status verified for 2024 Batch.")
-
-# MODULE 3: INDUSTRY & CORPORATE
-elif menu == "Module 3: Industry & Corporate":
-    st.header("🏢 Industry & Corporate Profile Service")
-    with st.form("company_onboarding"):
-        c_name = st.text_input("Company Name")
-        domain = st.text_input("Industry Domain")
-        tier = st.selectbox("Tier", ["Tier 1", "Tier 2", "Tier 3"])
-        mou = st.selectbox("MoU Status", ["Active", "Pending"])
-        if st.form_submit_button("Onboard Enterprise"):
-            st.session_state.db['Company'].append({"ID": f"COMP{len(st.session_state.db['Company'])+1}", "Name": c_name, "Domain": domain, "Tier": tier, "MoUStatus": mou})
-            st.rerun()
-    st.subheader("Recruiter Team & Agreements")
-    st.table(st.session_state.db['Company'])
-
-# MODULE 4: SKILL MAPPING ENGINE
-elif menu == "Module 4: Skill Mapping Engine":
-    st.header("🧠 Skill Taxonomy & Mapping Engine")
-    student_sel = st.selectbox("Select Student Profile", [u['Name'] for u in st.session_state.db['users'] if u['Role'] == 'Student'])
-    
-    # Skill Gap Analysis Logic
-    st.subheader("Skill Gap Report")
-    st.write(f"Analyzing {student_sel}'s verified skills against Industry Demand...")
-    
-    col1, col2 = st.columns(2)
-    col1.metric("Syllabus Skill Extraction", "Verified")
-    col2.metric("Compatibility Score", "72%")
-    
-    st.warning("Gap Identified: Student missing 'PostgreSQL' and 'Docker' as per Tier 1 benchmarks.")
-    st.info("Recommendation: Suggested Micro-credential - 'Advanced RDBMS Implementation'")
-
-# MODULE 5: OPPORTUNITY MANAGEMENT
-elif menu == "Module 5: Opportunity Management":
-    st.header("💼 Opportunity Management (Placements)")
-    with st.form("post_job"):
-        title = st.text_input("Opening Title")
-        company_name = st.selectbox("Company", [c['Name'] for c in st.session_state.db['Company']])
-        min_cgpa = st.number_input("Eligibility: Min CGPA", 0.0, 10.0, 7.0)
-        req_skills = st.multiselect("Required Skills", st.session_state.db['SkillTaxonomy'])
-        if st.form_submit_button("Post Opportunity"):
-            st.session_state.db['OpportunityPosting'].append({
-                "ID": f"JOB{len(st.session_state.db['OpportunityPosting'])+1}",
-                "Title": title, "Company": company_name, "EligibilityRule": min_cgpa, "SkillsReq": req_skills
-            })
-    st.subheader("Live Opportunities")
-    st.table(st.session_state.db['OpportunityPosting'])
-
-# MODULE 6: RECRUITMENT ATS
-elif menu == "Module 6: Recruitment ATS":
-    st.header("📑 Recruitment & Application Workflow (ATS)")
-    for job in st.session_state.db['OpportunityPosting']:
-        st.write(f"### Pipeline for {job['Title']} ({job['Company']})")
-        col1, col2 = st.columns([3,1])
-        col1.write(f"Eligibility: CGPA >= {job['EligibilityRule']}")
-        if col2.button(f"Apply for {job['ID']}"):
-            st.session_state.db['Application'].append({
-                "AppID": f"APP{len(st.session_state.db['Application'])+1}",
-                "Job": job['Title'], "Student": "Rohan", "Stage": "Applied"
-            })
-            st.success("Application Submitted successfully!")
-
-    st.subheader("Hiring Pipeline Status")
-    if st.session_state.db['Application']:
-        st.table(st.session_state.db['Application'])
-    else:
-        st.write("No active applications.")
-
-# MODULE 7: INTERNSHIP MONITORING
-elif menu == "Module 7: Internship Monitoring":
-    st.header("📅 Internship Monitoring & Credit Evaluation")
-    st.subheader("Active Enrollment Tracking")
-    st.table(st.session_state.db['InternshipEnrollment'])
-    
-    with st.form("milestone_submission"):
-        st.subheader("Weekly Milestone Logbook")
-        st_name = st.selectbox("Student", [u['Name'] for u in st.session_state.db['users'] if u['Role'] == 'Student'])
-        log_desc = st.text_area("Milestone Description")
-        rating = st.slider("Industry Mentor Rating (1-5)", 1, 5, 3)
-        if st.form_submit_button("Submit to Faculty Supervisor"):
-            log_entry = {"Date": str(date.today()), "Student": st_name, "Log": log_desc, "MentorRating": rating}
-            st.session_state.db['MilestoneLog'].append(log_entry)
-            st.success("Log submitted. Pending Faculty approval for Credit Transfer.")
-    
-    if st.session_state.db['MilestoneLog']:
-        st.write("Recent Submissions")
-        st.table(st.session_state.db['MilestoneLog'])
-
-# --- FOOTER ---
-st.sidebar.divider()
-st.sidebar.caption("System Entities: Institution, RecruiterTeam, SkillGapReport, OpportunityPosting, MilestoneLog")
+# =============================================================================
+# 8. DIRECT SCRIPT EXECUTION
+# =============================================================================
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
